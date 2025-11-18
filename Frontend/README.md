@@ -1,6 +1,11 @@
-# 프론트 환경
-- React + typescript 사용
 
-## 커밋 예정
-- 1차: 기초 웹 구성 및 css, 시뮬레이션 애니메이션 작동 테스트 위주
-- 2차: 올려주신 백엔드 반영하여 수정 예정
+  # Simulation Display for Sensors (복사)
+
+  This is a code bundle for Simulation Display for Sensors (복사). The original project is available at https://www.figma.com/design/IuUCtqEW3pcKn3sRk64L8n/Simulation-Display-for-Sensors--%EB%B3%B5%EC%82%AC-.
+
+  ## Running the code
+
+  Run `npm i` to install the dependencies.
+
+  Run `npm run dev` to start the development server.
+  
