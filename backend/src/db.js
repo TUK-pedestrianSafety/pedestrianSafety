@@ -27,6 +27,7 @@ function initDb() {
             sensor_id INTEGER NOT NULL,                  -- 센서 ID (FK: sensor.id)
 
             distance_m REAL NOT NULL,                    -- 센서와 물체 거리 (m)
+            duration_sec REAL NOT NULL,                  -- 측정 유지 시간
             detected_at DATETIME NOT NULL                -- 센서 측정 일시
             DEFAULT CURRENT_TIMESTAMP,             
             object_type TEXT NOT NULL,                   -- 'CAR', 'PERSON' 등
