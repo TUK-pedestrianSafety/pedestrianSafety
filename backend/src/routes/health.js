@@ -77,8 +77,8 @@ router.post("/ping", (req, res) => {
 
   // ping 로그 기록 수행
   db.run(
-    `INSERT INTO sensor_ping_log (sensor_id, response_ms, status)
-     VALUES (?, ?, ?)`,
+    `INSERT INTO sensor_ping_log (sensor_id, response_ms, status, ping_at)
+     VALUES (?, ?, ?, datetime('now', 'localtime'))`,
     [sensorId, responseMs, isTimeout ? "TIMEOUT" : "OK"],
     (err) => {
       if (err) return res.status(500).json({ error: "db error" });
@@ -92,20 +92,26 @@ router.post("/ping", (req, res) => {
         (err2, row) => {
           if (err2) return res.status(500).json({ error: "db error" });
 
-          let newCount = row.consecutive_timeout_count;
-          let faulty = row.is_faulty;
+          // row가 없을 경우(초기 상태) 기본값 0으로 처리
+          let newCount = row ? row.consecutive_timeout_count : 0;
+          let faulty = row ? row.is_faulty : 0;
 
-          if (isTimeout) newCount++;
-          else newCount = 0;
+          if (isTimeout) {
+            newCount++;
+            if (newCount >= 3) {
+              faulty = 1;
+              newCount = 0; // 3회 연속 타임아웃 시 카운트 초기화 및 고장 처리
+            }
+          } else {
+            newCount = 0;
+            faulty = 0; // 정상 응답 시 고장 해제
+          }
 
-          if (newCount >= 3) faulty = 1;
-
-          // 3) health 업데이트
+          // 3) health 업데이트 (없으면 삽입, 있으면 수정)
           db.run(
-            `UPDATE sensor_health
-             SET consecutive_timeout_count = ?, is_faulty = ?, updated_at = CURRENT_TIMESTAMP
-             WHERE sensor_id = ?`,
-            [newCount, faulty, sensorId],
+            `INSERT OR REPLACE INTO sensor_health (sensor_id, consecutive_timeout_count, is_faulty, updated_at)
+             VALUES (?, ?, ?, datetime('now', 'localtime'))`,
+            [sensorId, newCount, faulty],
             (err3) => {
               if (err3) return res.status(500).json({ error: "db error" });
 

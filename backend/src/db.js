@@ -84,7 +84,7 @@ function initDb() {
         const ROAD_END_X = 700; // 도로 끝 x (px)
         const SENSORS_PER_SIDE = 5; // 위에 5개, 아래 5개 → 총 10개
 
-        const ROAD_CENTER_Y = 300; // 도로 중앙 y (px)
+        const ROAD_CENTER_Y = 200; // 도로 중앙 y (px)
         const OFFSET_Y = 40; // 도로 위/아래 간격 (px)
 
         const stepX =

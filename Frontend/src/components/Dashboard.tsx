@@ -10,7 +10,8 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Activity, AlertTriangle, CheckCircle, ShieldAlert, Loader2 } from "lucide-react";
-import { mockApi, RiskEvent, SensorHealth } from "../services/mockApi";
+import { Button } from "./ui/button";
+import { getEvents, getHealth, sendPing, RiskEvent, SensorHealth } from "../services/api";
 
 export function Dashboard() {
   const [riskEvents, setRiskEvents] = useState<RiskEvent[]>([]);
@@ -18,39 +19,76 @@ export function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchData = async (isInitial = false) => {
       try {
-        setLoading(true);
+        if (isInitial) setLoading(true);
         const [events, health] = await Promise.all([
-          mockApi.getRiskEvents(),
-          mockApi.getSensorHealth(),
+          getEvents(),
+          getHealth(),
         ]);
-        setRiskEvents(events);
+
+        // Generate synthetic events for faulty sensors
+        const faultyEvents: RiskEvent[] = health
+          .filter(s => s.is_faulty === 1)
+          .map(s => ({
+            event_id: -s.sensor_id, // Negative ID to distinguish from DB events
+            sensor_id: s.sensor_id,
+            object_type: "System",
+            distance_m: 0,
+            risk_label: "고장",
+            detected_at: s.updated_at
+          }));
+
+        // Combine real events and faulty events
+        const allEvents = [...events, ...faultyEvents];
+        const sortedEvents = allEvents.sort((a, b) => a.sensor_id - b.sensor_id);
+
+        setRiskEvents(sortedEvents);
         setSensorHealthRegistry(health);
       } catch (error) {
         console.error("Failed to fetch dashboard data:", error);
       } finally {
-        setLoading(false);
+        if (isInitial) setLoading(false);
       }
     };
 
-    fetchData();
+    fetchData(true);
+    const interval = setInterval(() => fetchData(false), 2000); // 2초마다 갱신
+
+    return () => clearInterval(interval);
   }, []);
 
   // Autonomic Monitoring Logic
   const totalSensors = sensorHealthRegistry.length;
-  const faultySensors = sensorHealthRegistry.filter((s) => s.is_faulty === 0).length;
+  const faultySensors = sensorHealthRegistry.filter((s) => s.is_faulty === 1).length;
   const activeSensors = totalSensors - faultySensors;
 
-  const recentHighRisks = riskEvents.filter(e => e.risk_label === "위험").length;
+  const recentHighRisks = riskEvents.filter(e => e.risk_label === "고장").length;
   const currentRiskLevel = recentHighRisks > 0 ? "CRITICAL" : "NORMAL";
 
-  const getRiskColor = (label: string) => {
-    switch (label) {
-      case "위험": return "destructive"; // Red
-      case "경고": return "default";     // Orange/Primary
-      case "안전": return "secondary";   // Green/Gray
-      default: return "outline";
+  const formatTime = (dateString: string | null) => {
+    if (!dateString) return "-";
+    return dateString;
+  };
+
+  const handlePing = async (sensorId: number) => {
+    try {
+      const result = await sendPing(sensorId);
+      setSensorHealthRegistry((prev) =>
+        prev.map((s) =>
+          s.sensor_id === sensorId
+            ? {
+              ...s,
+              consecutive_timeout_count: result.consecutive_timeout_count,
+              is_faulty: result.is_faulty,
+            }
+            : s
+        )
+      );
+      alert(`핑 결과: ${result.timeout ? "타임아웃" : "성공"} (${result.response_ms ?? 0}ms)`);
+    } catch (error) {
+      console.error("Ping failed:", error);
+      alert("핑 전송 실패");
     }
   };
 
@@ -136,11 +174,22 @@ export function Dashboard() {
                     {event.distance_m}m
                   </TableCell>
                   <TableCell>
-                    <Badge variant={getRiskColor(event.risk_label) as any}>
+                    <Badge
+                      variant="outline"
+                      style={{
+                        backgroundColor:
+                          event.risk_label === "위험" ? "#FF4D4D" :
+                            event.risk_label === "경고" ? "#FFA500" :
+                              event.risk_label === "안전" ? "#4CAF50" :
+                                event.risk_label === "고장" ? "#4b5563" : undefined,
+                        color: "white",
+                        border: "none"
+                      }}
+                    >
                       {event.risk_label}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-gray-400 text-sm">{event.detected_at}</TableCell>
+                  <TableCell className="text-gray-400 text-sm">{formatTime(event.detected_at)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -153,7 +202,7 @@ export function Dashboard() {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold text-white flex items-center gap-2">
             <CheckCircle className="h-5 w-5 text-green-500" />
-            센서 상태 레지스트리
+            센서 상태 현황
           </h2>
           <Badge variant="outline" className="text-gray-400">sensor_health table</Badge>
         </div>
@@ -165,6 +214,7 @@ export function Dashboard() {
                 <TableHead className="text-gray-400">상태</TableHead>
                 <TableHead className="text-gray-400">연속 타임아웃</TableHead>
                 <TableHead className="text-gray-400">마지막 업데이트</TableHead>
+                <TableHead className="text-gray-400">작업</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -172,10 +222,10 @@ export function Dashboard() {
                 <TableRow key={sensor.sensor_id} className="border-gray-700 hover:bg-gray-700/50">
                   <TableCell className="text-gray-300 font-medium">Sensor #{sensor.sensor_id}</TableCell>
                   <TableCell>
-                    {sensor.is_faulty === 1 ? (
-                      <Badge className="bg-green-900 text-green-300 hover:bg-green-900">Active</Badge>
+                    {sensor.is_faulty !== 1 ? (
+                      <Badge style={{ backgroundColor: "#4CAF50", color: "white", border: "none" }}>정상</Badge>
                     ) : (
-                      <Badge variant="destructive">Faulty</Badge>
+                      <Badge style={{ backgroundColor: "#FF4D4D", color: "white", border: "none" }}>오류</Badge>
                     )}
                   </TableCell>
                   <TableCell className="text-gray-300">
@@ -185,14 +235,22 @@ export function Dashboard() {
                       <span className="text-gray-500">0</span>
                     )}
                   </TableCell>
-                  <TableCell className="text-gray-400 text-sm">{sensor.updated_at}</TableCell>
+                  <TableCell className="text-gray-400 text-sm">{formatTime(sensor.updated_at)}</TableCell>
+                  <TableCell>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePing(sensor.sensor_id)}
+                    >
+                      Ping
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </div>
       </div>
-
     </div>
   );
 }

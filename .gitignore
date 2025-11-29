@@ -2,3 +2,15 @@ node_modules/
 .env
 .DS_Store
 *.db
+
+# 빌드하면 생기는 결과물 (아직 없어도 미리 적어놓기)
+dist/
+build/
+
+# 환경설정 파일 (혹시 나중에 API 키 같은거 넣을 때 대비)
+.env
+.env.local
+
+# 맥/윈도우 시스템 부속물(필요없음)
+.DS_Store
+Thumbs.db

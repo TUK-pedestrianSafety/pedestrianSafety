@@ -12,8 +12,8 @@ export function SensorDataTable() {
   // 거리에 따른 상태 계산 (절대값 기준)
   const getStatusFromDistance = (distance: number) => {
     const absDistance = Math.abs(distance);
-    if (absDistance <= 10) return "위험";
-    if (absDistance <= 20) return "경고";
+    if (absDistance <= 15) return "위험";
+    if (absDistance <= 25) return "경고";
     if (absDistance <= 50) return "안전";
     return "범위밖"; // 50m 초과
   };
